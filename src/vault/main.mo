@@ -4,6 +4,7 @@ import Hash "mo:base/Hash";
 import Iter "mo:base/Iter";
 import Array "mo:base/Array";
 import Nat "mo:base/Nat";
+import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
 import Int "mo:base/Int";
 import Text "mo:base/Text";
@@ -76,12 +77,12 @@ actor VaultManager {
 
   // State
   private stable var nextVaultId: Nat = 0;
-  private var vaults = HashMap.HashMap<VaultId, Vault>(10, Nat.equal, Hash.hash);
+  private transient var vaults = HashMap.HashMap<VaultId, Vault>(10, Nat.equal, Hash.hash);
   private stable var vaultsEntries: [(VaultId, Vault)] = [];
 
   // Token decimals (8 decimals like BTC)
-  private let DECIMALS: Nat8 = 8;
-  private let FEE: Nat = 10_000; // 0.0001 tokens
+  private transient let DECIMALS: Nat8 = 8;
+  private transient let FEE: Nat = 10_000; // 0.0001 tokens
 
   // System functions for upgrades
   system func preupgrade() {
@@ -241,6 +242,28 @@ actor VaultManager {
     Buffer.toArray(buffer);
   };
 
+  private func subtractShareHolderBalance(
+    shareHolders: [(Principal, Nat)],
+    holder: Principal,
+    sharesToSubtract: Nat
+  ): [(Principal, Nat)] {
+    let buffer = Buffer.Buffer<(Principal, Nat)>(shareHolders.size());
+
+    for ((principal, shares) in shareHolders.vals()) {
+      if (Principal.equal(principal, holder)) {
+        if (shares >= sharesToSubtract) {
+          buffer.add((principal, shares - sharesToSubtract));
+        } else {
+          buffer.add((principal, 0));
+        };
+      } else {
+        buffer.add((principal, shares));
+      };
+    };
+
+    Buffer.toArray(buffer);
+  };
+
   // Redeem shares for in-kind assets
   public shared(msg) func redeem(
     vaultId: VaultId,
@@ -262,14 +285,14 @@ actor VaultManager {
 
         for (asset in vault.assets.vals()) {
           let amountToReturn = (asset.amount * proportion) / 1_000_000;
-          let remainingAmount = asset.amount - amountToReturn;
 
           assetsToReturn.add({
             assetType = asset.assetType;
             amount = amountToReturn;
           });
 
-          if (remainingAmount > 0) {
+          if (asset.amount > amountToReturn) {
+            let remainingAmount = asset.amount - amountToReturn;
             remainingAssets.add({
               assetType = asset.assetType;
               amount = remainingAmount;
@@ -278,10 +301,10 @@ actor VaultManager {
         };
 
         // Update shareholder balances
-        let updatedShareHolders = updateShareHolderBalance(
+        let updatedShareHolders = subtractShareHolderBalance(
           vault.shareHolders,
           msg.caller,
-          -shares // Subtract shares
+          shares // Subtract shares
         );
 
         // Filter out shareholders with 0 shares
@@ -364,10 +387,10 @@ actor VaultManager {
         };
 
         // Update balances
-        var updatedShareHolders = updateShareHolderBalance(
+        var updatedShareHolders = subtractShareHolderBalance(
           vault.shareHolders,
           from,
-          -(amount + FEE) // Subtract amount + fee
+          amount + FEE // Subtract amount + fee
         );
 
         updatedShareHolders := updateShareHolderBalance(
@@ -404,7 +427,7 @@ actor VaultManager {
         [
           ("icrc1:name", #Text("Vault Share Token - " # vault.name)),
           ("icrc1:symbol", #Text("VST")),
-          ("icrc1:decimals", #Nat(Nat8.toNat(DECIMALS))),
+          ("icrc1:decimals", #Nat(8)),
           ("icrc1:fee", #Nat(FEE)),
         ];
       };
