@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fusion Vault - Multi-Chain Tokenized Vaults</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 Fusion Vault</h1>
+            <p class="subtitle">Multi-Chain Tokenized Vaults on ICP</p>
+            <div id="auth-section">
+                <button id="connect-btn" class="btn btn-primary">Connect Wallet</button>
+                <span id="principal-display"></span>
+            </div>
+        </header>
+
+        <main>
+            <!-- Create Vault Section -->
+            <section class="card">
+                <h2>Create New Vault</h2>
+                <div class="form-group">
+                    <label for="vault-name">Vault Name</label>
+                    <input type="text" id="vault-name" placeholder="My Multi-Chain Vault">
+                    <button id="create-vault-btn" class="btn btn-primary">Create Vault</button>
+                </div>
+                <div id="create-result"></div>
+            </section>
+
+            <!-- Vault List Section -->
+            <section class="card">
+                <h2>Your Vaults</h2>
+                <button id="refresh-vaults-btn" class="btn btn-secondary">Refresh Vaults</button>
+                <div id="vault-list"></div>
+            </section>
+
+            <!-- Vault Details Section -->
+            <section class="card" id="vault-details" style="display: none;">
+                <h2>Vault Details</h2>
+                <div id="vault-info"></div>
+
+                <!-- Multi-Chain Addresses -->
+                <div class="subsection">
+                    <h3>Multi-Chain Addresses</h3>
+                    <div id="chain-addresses"></div>
+                    <button id="generate-btc-btn" class="btn btn-secondary">Generate BTC Address</button>
+                    <button id="generate-eth-btn" class="btn btn-secondary">Generate ETH Address</button>
+                </div>
+
+                <!-- Deposit Section -->
+                <div class="subsection">
+                    <h3>Deposit Assets</h3>
+                    <div class="form-group">
+                        <label for="asset-type">Asset Type</label>
+                        <select id="asset-type">
+                            <option value="ICP">ICP</option>
+                            <option value="BTC">BTC</option>
+                            <option value="ETH">ETH</option>
+                            <option value="USDC">USDC</option>
+                            <option value="USDT">USDT</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="deposit-amount">Amount (in smallest unit)</label>
+                        <input type="number" id="deposit-amount" placeholder="100000000">
+                        <small>1 ICP = 100,000,000 e8s</small>
+                    </div>
+                    <button id="deposit-btn" class="btn btn-primary">Deposit & Mint Shares</button>
+                    <div id="deposit-result"></div>
+                </div>
+
+                <!-- Redeem Section -->
+                <div class="subsection">
+                    <h3>Redeem Shares</h3>
+                    <div class="form-group">
+                        <label for="redeem-shares">Shares to Redeem</label>
+                        <input type="number" id="redeem-shares" placeholder="1000000">
+                    </div>
+                    <button id="redeem-btn" class="btn btn-warning">Redeem In-Kind</button>
+                    <div id="redeem-result"></div>
+                </div>
+
+                <!-- Transfer Shares -->
+                <div class="subsection">
+                    <h3>Transfer Shares</h3>
+                    <div class="form-group">
+                        <label for="transfer-to">To Principal</label>
+                        <input type="text" id="transfer-to" placeholder="xxxxx-xxxxx-xxxxx-xxxxx-xxx">
+                    </div>
+                    <div class="form-group">
+                        <label for="transfer-amount">Amount</label>
+                        <input type="number" id="transfer-amount" placeholder="1000000">
+                    </div>
+                    <button id="transfer-btn" class="btn btn-primary">Transfer</button>
+                    <div id="transfer-result"></div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Built on the Internet Computer | Using ICRC-2 Token Standard</p>
+        </footer>
+    </div>
+
+    <script type="module" src="index.js"></script>
+</body>
+</html>

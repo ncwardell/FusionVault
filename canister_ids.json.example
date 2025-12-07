@@ -1,0 +1,10 @@
+{
+  "vault": {
+    "ic": "your-mainnet-canister-id",
+    "local": "your-local-canister-id"
+  },
+  "frontend": {
+    "ic": "your-mainnet-frontend-id",
+    "local": "your-local-frontend-id"
+  }
+}
