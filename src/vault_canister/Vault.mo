@@ -4,6 +4,8 @@ import Result "mo:base/Result";
 import Option "mo:base/Option";
 import Array "mo:base/Array";
 import Blob "mo:base/Blob";
+import Nat "mo:base/Nat";
+import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
@@ -28,9 +30,9 @@ shared(init_msg) actor class Vault(
   private stable var allowanceEntries: [((Types.Account, Types.Account), Types.Allowance)] = [];
   private stable var transactionEntries: [(Nat, Types.Transaction)] = [];
 
-  private var balances = HashMap.HashMap<Types.Account, Nat>(10, accountEqual, accountHash);
-  private var allowances = HashMap.HashMap<(Types.Account, Types.Account), Types.Allowance>(10, allowanceKeyEqual, allowanceKeyHash);
-  private var transactions = HashMap.HashMap<Nat, Types.Transaction>(10, Nat.equal, Hash.hash);
+  private transient var balances = HashMap.HashMap<Types.Account, Nat>(10, accountEqual, accountHash);
+  private transient var allowances = HashMap.HashMap<(Types.Account, Types.Account), Types.Allowance>(10, allowanceKeyEqual, allowanceKeyHash);
+  private transient var transactions = HashMap.HashMap<Nat, Types.Transaction>(10, Nat.equal, Hash.hash);
 
   // Token metadata
   private stable let name: Text = init_name;

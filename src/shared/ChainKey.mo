@@ -153,7 +153,7 @@ module {
   };
 
   // Verify ECDSA signature
-  public func verifyECDSA(publicKey: Blob, message: Blob, signature: Blob): Bool {
+  public func verifyECDSA(_publicKey: Blob, _message: Blob, _signature: Blob): Bool {
     // Placeholder - in production, implement proper ECDSA verification
     // This would typically be done off-chain or with a crypto library
     true // Simplified for now
