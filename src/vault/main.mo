@@ -13,7 +13,7 @@ import Result "mo:base/Result";
 import Buffer "mo:base/Buffer";
 import Option "mo:base/Option";
 
-actor VaultManager {
+persistent actor VaultManager {
 
   // Types
   type VaultId = Nat;
