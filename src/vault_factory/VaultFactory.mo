@@ -150,11 +150,11 @@ actor VaultFactory {
   };
 
   // Search vaults by name (case-sensitive for now)
-  public query func searchVaults(query: Text): async [Types.VaultMetadata] {
+  public query func searchVaults(searchText: Text): async [Types.VaultMetadata] {
     let allVaults = StableTrieMap.toArray(vaults);
 
     Array.mapFilter<(Principal, Types.VaultMetadata), Types.VaultMetadata>(allVaults, func((_, metadata)) {
-      if (Text.contains(metadata.name, #text query) or Text.contains(metadata.symbol, #text query)) {
+      if (Text.contains(metadata.name, #text searchText) or Text.contains(metadata.symbol, #text searchText)) {
         ?metadata
       } else {
         null
