@@ -6,11 +6,13 @@ import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import Nat64 "mo:base/Nat64";
 import Int "mo:base/Int";
-import StableMemory "mo:base/ExperimentalStableMemory";
+import Iter "mo:base/Iter";
+import HashMap "mo:base/HashMap";
+import Hash "mo:base/Hash";
+import Nat32 "mo:base/Nat32";
 import Types "../shared/Types";
 import ICRC "../shared/ICRC";
 import ChainKey "../shared/ChainKey";
-import StableTrieMap "mo:StableTrieMap";
 
 shared(init_msg) actor class Vault(
   init_name: Text,
@@ -21,14 +23,14 @@ shared(init_msg) actor class Vault(
   init_creator: Principal
 ) = this {
 
-  // Stable storage using StableTrieMap for efficient upgrades
+  // Stable storage using HashMap for efficient upgrades
   private stable var balanceEntries: [(Types.Account, Nat)] = [];
   private stable var allowanceEntries: [((Types.Account, Types.Account), Types.Allowance)] = [];
   private stable var transactionEntries: [(Nat, Types.Transaction)] = [];
 
-  private var balances = StableTrieMap.StableTrieMap<Types.Account, Nat>(0, accountEqual, accountHash);
-  private var allowances = StableTrieMap.StableTrieMap<(Types.Account, Types.Account), Types.Allowance>(0, allowanceKeyEqual, allowanceKeyHash);
-  private var transactions = StableTrieMap.StableTrieMap<Nat, Types.Transaction>(0, Nat.equal, func(n: Nat) : Nat32 { Nat32.fromNat(n % 1000000) });
+  private var balances = HashMap.HashMap<Types.Account, Nat>(10, accountEqual, accountHash);
+  private var allowances = HashMap.HashMap<(Types.Account, Types.Account), Types.Allowance>(10, allowanceKeyEqual, allowanceKeyHash);
+  private var transactions = HashMap.HashMap<Nat, Types.Transaction>(10, Nat.equal, Hash.hash);
 
   // Token metadata
   private stable let name: Text = init_name;
@@ -56,15 +58,30 @@ shared(init_msg) actor class Vault(
 
   // System functions for upgrades
   system func preupgrade() {
-    balanceEntries := StableTrieMap.toArray(balances);
-    allowanceEntries := StableTrieMap.toArray(allowances);
-    transactionEntries := StableTrieMap.toArray(transactions);
+    balanceEntries := Iter.toArray(balances.entries());
+    allowanceEntries := Iter.toArray(allowances.entries());
+    transactionEntries := Iter.toArray(transactions.entries());
   };
 
   system func postupgrade() {
-    balances := StableTrieMap.fromArray(balanceEntries, accountEqual, accountHash);
-    allowances := StableTrieMap.fromArray(allowanceEntries, allowanceKeyEqual, allowanceKeyHash);
-    transactions := StableTrieMap.fromArray(transactionEntries, Nat.equal, func(n: Nat) : Nat32 { Nat32.fromNat(n % 1000000) });
+    balances := HashMap.fromIter<Types.Account, Nat>(
+      balanceEntries.vals(),
+      10,
+      accountEqual,
+      accountHash
+    );
+    allowances := HashMap.fromIter<(Types.Account, Types.Account), Types.Allowance>(
+      allowanceEntries.vals(),
+      10,
+      allowanceKeyEqual,
+      allowanceKeyHash
+    );
+    transactions := HashMap.fromIter<Nat, Types.Transaction>(
+      transactionEntries.vals(),
+      10,
+      Nat.equal,
+      Hash.hash
+    );
     balanceEntries := [];
     allowanceEntries := [];
     transactionEntries := [];
@@ -92,21 +109,21 @@ shared(init_msg) actor class Vault(
   };
 
   private func getBalance(account: Types.Account): Nat {
-    Option.get(StableTrieMap.get(balances, accountEqual, accountHash, account), 0)
+    Option.get(balances.get(account), 0)
   };
 
   private func setBalance(account: Types.Account, balance: Nat) {
     if (balance == 0) {
-      StableTrieMap.delete(balances, accountEqual, accountHash, account);
+      balances.delete(account);
     } else {
-      StableTrieMap.put(balances, accountEqual, accountHash, account, balance);
+      balances.put(account, balance);
     };
   };
 
   private func addTransaction(tx: Types.Transaction): Nat {
     let txId = nextTxId;
     nextTxId += 1;
-    StableTrieMap.put(transactions, Nat.equal, func(n: Nat) : Nat32 { Nat32.fromNat(n % 1000000) }, txId, tx);
+    transactions.put(txId, tx);
     txId
   };
 
@@ -292,7 +309,7 @@ shared(init_msg) actor class Vault(
 
     // Check expected allowance
     let key = (from, args.spender);
-    let currentAllowance = Option.get(StableTrieMap.get(allowances, allowanceKeyEqual, allowanceKeyHash, key), { allowance = 0; expires_at = null });
+    let currentAllowance = Option.get(allowances.get(key), { allowance = 0; expires_at = null });
 
     switch (args.expected_allowance) {
       case (?expected) {
@@ -319,7 +336,7 @@ shared(init_msg) actor class Vault(
       allowance = args.amount;
       expires_at = args.expires_at;
     };
-    StableTrieMap.put(allowances, allowanceKeyEqual, allowanceKeyHash, key, newAllowance);
+    allowances.put(key, newAllowance);
 
     // Charge fee
     setBalance(from, fromBalance - fee);
@@ -380,7 +397,7 @@ shared(init_msg) actor class Vault(
 
     // Check allowance
     let key = (args.from, spender);
-    let currentAllowance = Option.get(StableTrieMap.get(allowances, allowanceKeyEqual, allowanceKeyHash, key), { allowance = 0; expires_at = null });
+    let currentAllowance = Option.get(allowances.get(key), { allowance = 0; expires_at = null });
 
     // Check if allowance is expired
     switch (currentAllowance.expires_at) {
@@ -407,7 +424,7 @@ shared(init_msg) actor class Vault(
       allowance = currentAllowance.allowance - args.amount - fee;
       expires_at = currentAllowance.expires_at;
     };
-    StableTrieMap.put(allowances, allowanceKeyEqual, allowanceKeyHash, key, newAllowance);
+    allowances.put(key, newAllowance);
 
     // Burn the fee
     totalSupply_ -= fee;
@@ -433,7 +450,7 @@ shared(init_msg) actor class Vault(
     spender: Types.Account;
   }): async Types.Allowance {
     let key = (args.account, args.spender);
-    let currentAllowance = Option.get(StableTrieMap.get(allowances, allowanceKeyEqual, allowanceKeyHash, key), { allowance = 0; expires_at = null });
+    let currentAllowance = Option.get(allowances.get(key), { allowance = 0; expires_at = null });
 
     // Check if expired
     switch (currentAllowance.expires_at) {
