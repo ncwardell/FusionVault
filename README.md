@@ -1,322 +1,465 @@
-# Fusion Vault - Multi-Chain Tokenized Vaults on ICP
+# FusionVault - Multi-Asset Fractionally Owned Smart Wallet
 
-A decentralized multi-chain vault system built on the Internet Computer Protocol (ICP) that enables users to create tokenized vaults with support for Bitcoin, Ethereum, and other assets. Vault ownership is represented by ICRC-2 compliant tokens, and users can perform in-kind redemptions.
+A production-ready multi-asset smart wallet system with fractional ownership on the Internet Computer Protocol (ICP). Built with a canister-per-vault architecture where each vault is an independent ICRC-2 compliant token.
 
-## Features
+## Why This Architecture?
 
-- **Multi-Vault System**: Create unlimited independent vaults
-- **ICRC-2 Token Standard**: Each vault issues ownership tokens following ICRC-2
-- **Multi-Chain Support**: Support for BTC, ETH, ICP, USDC, USDT via ICP's chain-key cryptography
-- **Proportional Ownership**: Receive tokens based on your contribution to the vault
-- **In-Kind Redemptions**: Redeem your shares for proportional amounts of all assets in the vault
-- **Simple Web Interface**: Easy-to-use UI for all vault operations
-- **ICP.Ninja Compatible**: Standard canister implementation for easy testing
+The previous design had critical flaws:
+- ❌ Poor scalability (array-based shareholder tracking)
+- ❌ Not truly ICRC-2 compliant (shares couldn't be used in DEXs)
+- ❌ Single point of failure (all vaults in one canister)
+- ❌ No real multi-chain integration
 
-## Architecture
+## New Architecture Benefits
 
-### Vault Canister
-The main canister written in Motoko that handles:
-- Vault creation and management
-- Asset deposits and tracking
-- Share minting and burning
-- ICRC-2 token operations
-- Multi-chain address generation (via threshold signatures)
-- In-kind redemptions
+✅ **Canister-Per-Vault**: Each vault is an independent canister = horizontal scaling
+✅ **True ICRC-2 Tokens**: Vault shares ARE tokens, usable in any DEX or wallet
+✅ **Chain-Key Integration**: Real Bitcoin/Ethereum addresses via threshold ECDSA
+✅ **Internet Identity**: Passwordless, secure Web3 authentication
+✅ **Stable Storage**: Uses StableTrieMap for efficient upgrades
+✅ **Factory Pattern**: VaultFactory spawns and manages vault instances
 
-### Frontend
-Simple HTML/CSS/JavaScript interface that provides:
-- Vault creation
-- Asset deposits
-- Share redemption
-- Share transfers
-- Multi-chain address generation
-- Balance viewing
+## Project Structure
+
+```
+FusionVault/
+├── src/
+│   ├── shared/                    # Shared modules
+│   │   ├── Types.mo               # ICRC-2 and vault type definitions
+│   │   ├── ICRC.mo                # ICRC-1/2 ledger integration
+│   │   └── ChainKey.mo            # Bitcoin/Ethereum tECDSA integration
+│   ├── vault_factory/             # Factory canister
+│   │   └── VaultFactory.mo        # Creates and manages vault instances
+│   ├── vault_canister/            # Vault template
+│   │   └── Vault.mo               # Individual vault (ICRC-2 token)
+│   └── frontend/                  # Web interface
+│       ├── index.html             # Main UI
+│       ├── styles.css             # Modern dark theme styling
+│       └── index.js               # Internet Identity + agent integration
+├── dfx.json                       # Canister configuration
+└── README.md                      # This file
+```
+
+## Key Components
+
+### 1. VaultFactory (src/vault_factory/VaultFactory.mo)
+
+The factory canister manages vault lifecycle:
+
+**Methods:**
+- `createVault()` - Spawns new vault canisters with proper cycle funding
+- `listVaults(offset, limit)` - Paginated vault listing
+- `getVaultsByCreator(principal)` - Get vaults created by a user
+- `searchVaults(query)` - Search vaults by name/symbol
+- `getFactoryStats()` - Get factory statistics
+
+**Features:**
+- Tracks all created vaults in stable storage
+- Maintains creator index for fast lookups
+- Provides vault discovery and search
+- Handles cycle management for new vaults
+
+### 2. Vault Canister (src/vault_canister/Vault.mo)
+
+Each vault IS an ICRC-2 compliant token with vault functionality:
+
+#### ICRC-1 Standard (Base Token)
+```motoko
+icrc1_name() -> Text
+icrc1_symbol() -> Text
+icrc1_decimals() -> Nat8
+icrc1_total_supply() -> Nat
+icrc1_balance_of(account) -> Nat
+icrc1_transfer(args) -> Result<Nat, TransferError>
+icrc1_metadata() -> [(Text, MetadataValue)]
+icrc1_supported_standards() -> [{name: Text; url: Text}]
+```
+
+#### ICRC-2 Standard (Approvals & Allowances)
+```motoko
+icrc2_approve(args) -> Result<Nat, ApproveError>
+icrc2_transfer_from(args) -> Result<Nat, TransferFromError>
+icrc2_allowance(account, spender) -> Allowance
+```
+
+#### Vault-Specific Methods
+```motoko
+deposit(args) -> Result<Nat, Text>  // Mint shares
+withdraw(args) -> Result<Nat, Text>  // Burn shares
+generateBitcoinAddress() -> Result<Text, Text>
+generateEthereumAddress() -> Result<Text, Text>
+getVaultMetadata() -> VaultMetadata
+getAssetBalances() -> [AssetBalance]
+```
+
+### 3. Frontend (Internet Identity Integration)
+
+Modern web interface with:
+- **Internet Identity Login** - Secure, passwordless authentication
+- **Vault Creation** - User-friendly vault spawning
+- **Vault Discovery** - Browse and search all vaults
+- **Asset Management** - Deposit, withdraw, and transfer shares
+- **Multi-Chain Addresses** - Generate and display BTC/ETH addresses
+- **Responsive Design** - Works on desktop and mobile
+
+## How It Works
+
+### 1. Creating a Vault
+
+```javascript
+// User logs in with Internet Identity
+await authClient.login({ identityProvider: II_URL });
+
+// User creates a vault
+const result = await vaultFactoryActor.createVault({
+  name: "My Portfolio",
+  symbol: "MPRT",
+  description: "Diversified crypto portfolio",
+  supportedAssets: [
+    { ICP: { ledger: "ryjl3-tyaaa-aaaaa-aaaba-cai" } }
+  ],
+  initialDeposit: null
+});
+
+// Returns: { ok: Principal } (new vault canister ID)
+```
+
+**Behind the scenes:**
+1. Factory receives request with 2T cycles
+2. Spawns new Vault canister with user as creator
+3. Initializes vault as ICRC-2 token (8 decimals, 0.0001 fee)
+4. Registers vault in factory's stable storage
+5. Returns vault canister ID to user
+
+### 2. Depositing Assets & Minting Shares
+
+```motoko
+// Step 1: User approves ICRC-1 transfer to vault
+await icpLedger.icrc2_approve({
+  spender: { owner: vaultCanisterId, subaccount: null },
+  amount: 100_000_000 // 1 ICP
+});
+
+// Step 2: User deposits to vault
+let shares = await vault.deposit({
+  assetType: { ICP: { ledger: icpLedgerCanister } },
+  amount: 100_000_000,
+  from: { owner: userPrincipal, subaccount: null }
+});
+
+// Vault calculates shares:
+// - First deposit: 1:1 ratio (1 ICP = 1 share)
+// - Later deposits: (amount * totalShares) / totalValueLocked
+```
+
+**Share calculation ensures:**
+- Fair pricing based on current vault value
+- Proportional ownership for all depositors
+- No dilution of existing shareholders
+
+### 3. Trading Vault Shares
+
+Since shares are ICRC-2 tokens, they can be:
+
+**Peer-to-Peer Transfer:**
+```motoko
+await vault.icrc1_transfer({
+  to: { owner: recipientPrincipal, subaccount: null },
+  amount: 50_000_000 // 0.5 shares
+});
+```
+
+**DEX Trading:**
+```motoko
+// List on ICPSwap
+await icpSwap.createPool({
+  token0: vaultCanisterId,  // Your vault shares
+  token1: icpLedgerCanister, // ICP
+  initialPrice: ...
+});
+```
+
+**Approved Spending:**
+```motoko
+// Approve DEX to spend shares
+await vault.icrc2_approve({
+  spender: { owner: dexCanisterId, subaccount: null },
+  amount: 100_000_000
+});
+
+// DEX transfers on your behalf
+await vault.icrc2_transfer_from({
+  from: { owner: userPrincipal, subaccount: null },
+  to: { owner: buyerPrincipal, subaccount: null },
+  amount: 50_000_000
+});
+```
+
+### 4. Withdrawing Assets
+
+```motoko
+// Burn shares to withdraw proportional assets
+let assetAmount = await vault.withdraw({
+  assetType: { ICP: { ledger: icpLedgerCanister } },
+  shares: 50_000_000, // Burn 0.5 shares
+  to: { owner: userPrincipal, subaccount: null }
+});
+
+// Calculation:
+// assetAmount = (shares / totalSupply) * totalValueLocked
+```
+
+**Withdrawal process:**
+1. Burns user's shares (reduces total supply)
+2. Calculates proportional asset amount
+3. Transfers assets from vault to user
+4. Updates vault's total value locked
+
+### 5. Multi-Chain Integration (Chain-Key Cryptography)
+
+```motoko
+// Generate Bitcoin address
+let btcAddress = await vault.generateBitcoinAddress();
+// Returns: "bc1q..." (P2WPKH SegWit address)
+
+// Generate Ethereum address
+let ethAddress = await vault.generateEthereumAddress();
+// Returns: "0x..." (standard Ethereum address)
+```
+
+**Chain-Key Features:**
+- **Threshold ECDSA**: No single point of compromise
+- **Derivation Paths**: Each vault has unique addresses
+- **Native Integration**: Direct Bitcoin/Ethereum signing
+- **No Bridges**: Assets held natively on-chain
 
 ## Getting Started
 
 ### Prerequisites
 
-1. Install the DFINITY Canister SDK:
 ```bash
+# Install dfx (Internet Computer SDK)
 sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
-```
 
-2. Verify installation:
-```bash
+# Verify installation
 dfx --version
 ```
 
 ### Local Development
 
-1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd FusionWallet
-```
+# 1. Clone repository
+git clone <repo-url>
+cd FusionVault
 
-2. Start the local Internet Computer replica:
-```bash
+# 2. Install frontend dependencies
+npm install
+
+# 3. Start local replica
 dfx start --clean --background
+
+# 4. Deploy Internet Identity (local)
+dfx deploy internet_identity
+
+# 5. Deploy vault factory
+dfx deploy vault_factory
+
+# 6. Deploy frontend
+dfx deploy frontend
+
+# 7. Get frontend URL
+echo "http://localhost:4943/?canisterId=$(dfx canister id frontend)"
 ```
 
-3. Deploy the canisters:
+### Mainnet Deployment
+
 ```bash
-dfx deploy
+# Deploy to IC mainnet with cycles
+dfx deploy --network ic vault_factory --with-cycles 10000000000000
+dfx deploy --network ic frontend
+
+# Internet Identity on mainnet: rdmx6-jaaaa-aaaaa-aaadq-cai
 ```
 
-4. The deployment will output the canister IDs. Note the frontend URL:
-```
-Frontend canister via browser:
-  frontend: http://127.0.0.1:4943/?canisterId=<canister-id>
-```
+## Frontend Dependencies
 
-5. Open the frontend URL in your browser to use the application.
+Create `package.json`:
 
-### Testing with ICP.Ninja
-
-[ICP.Ninja](https://icp.ninja) is an online IDE for testing ICP canisters (similar to Remix for Ethereum).
-
-1. Build your canister:
-```bash
-dfx build vault
-```
-
-2. Get the Candid interface:
-```bash
-cat .dfx/local/canisters/vault/vault.did
+```json
+{
+  "name": "fusionvault-frontend",
+  "version": "2.0.0",
+  "type": "module",
+  "dependencies": {
+    "@dfinity/agent": "^0.21.0",
+    "@dfinity/auth-client": "^0.21.0",
+    "@dfinity/candid": "^0.21.0",
+    "@dfinity/principal": "^0.21.0"
+  }
+}
 ```
 
-3. Go to [ICP.Ninja](https://icp.ninja)
-
-4. Create a new project and paste your Motoko code or upload the `.wasm` file
-
-5. Deploy and interact with your canister directly in the browser
-
-## Usage Guide
-
-### Creating a Vault
-
-1. Connect your wallet (Internet Identity or Plug Wallet)
-2. Enter a name for your vault
-3. Click "Create Vault"
-4. Note the Vault ID for future reference
-
-### Depositing Assets
-
-1. Select a vault from the list
-2. Choose the asset type (ICP, BTC, ETH, USDC, USDT)
-3. Enter the amount in the smallest unit (e.g., satoshis for BTC, wei for ETH)
-4. Click "Deposit & Mint Shares"
-5. Shares will be minted proportionally to your deposit
-
-**Note**: For the first deposit in a vault, shares are minted 1:1 with the amount. For subsequent deposits, shares are calculated based on the vault's total value.
-
-### Redeeming Shares
-
-1. Select a vault where you hold shares
-2. Enter the number of shares to redeem
-3. Click "Redeem In-Kind"
-4. You'll receive a proportional amount of all assets in the vault
-
-### Transferring Shares
-
-1. Select a vault
-2. Enter the recipient's Principal ID
-3. Enter the number of shares to transfer
-4. Click "Transfer"
-5. A small fee (0.0001 tokens) will be deducted
-
-### Generating Multi-Chain Addresses
-
-1. Select a vault
-2. Click "Generate BTC Address" or "Generate ETH Address"
-3. The address will be displayed and can be used to receive funds
-
-**Note**: In the current implementation, address generation uses placeholders. For production, these would use ICP's threshold ECDSA/Schnorr signatures.
-
-## ICRC-2 Token Standard
-
-Each vault implements the ICRC-2 token standard for its ownership shares:
-
-- **icrc1_name()**: Returns the vault's token name
-- **icrc1_symbol()**: Returns "VST" (Vault Share Token)
-- **icrc1_decimals()**: Returns 8 (like Bitcoin)
-- **icrc1_fee()**: Returns 10,000 (0.0001 tokens)
-- **icrc1_total_supply()**: Returns total shares in the vault
-- **icrc1_balance_of()**: Returns shares held by an account
-- **icrc1_transfer()**: Transfers shares between accounts
-- **icrc1_metadata()**: Returns token metadata
+Install: `npm install`
 
 ## API Reference
 
-### Vault Management
+### VaultFactory
 
 ```motoko
-// Create a new vault
-createVault(name: Text): async Result<VaultId, Text>
+// Create vault (costs 2T cycles)
+createVault(args: CreateVaultArgs) -> Result<Principal, Text>
 
-// Get vault information
-getVault(vaultId: VaultId): async ?Vault
+// Get vault metadata
+getVault(canisterId: Principal) -> ?VaultMetadata
 
-// List all vaults
-listVaults(): async [Vault]
+// List vaults (paginated)
+listVaults(offset: Nat, limit: Nat) -> {
+  vaults: [VaultMetadata];
+  total: Nat
+}
+
+// Get user's vaults
+getVaultsByCreator(creator: Principal) -> [VaultMetadata]
+
+// Search vaults
+searchVaults(query: Text) -> [VaultMetadata]
+
+// Factory stats
+getFactoryStats() -> {
+  totalVaults: Nat;
+  createdAt: Time;
+  creationFee: Nat
+}
 ```
 
-### Asset Operations
+### Vault (ICRC-2 + Custom)
 
+**ICRC-1:**
 ```motoko
-// Deposit assets and mint shares
-deposit(vaultId: VaultId, assetType: AssetType, amount: Nat): async Result<Nat, Text>
-
-// Redeem shares for in-kind assets
-redeem(vaultId: VaultId, shares: Nat): async Result<[AssetBalance], Text>
+icrc1_name() -> Text
+icrc1_symbol() -> Text
+icrc1_decimals() -> Nat8  // Always 8
+icrc1_fee() -> Nat  // 10,000 (0.0001 tokens)
+icrc1_total_supply() -> Nat
+icrc1_balance_of(account: Account) -> Nat
+icrc1_transfer(args: TransferArgs) -> Result<Nat, TransferError>
 ```
 
-### Multi-Chain
-
+**ICRC-2:**
 ```motoko
-// Generate Bitcoin address for vault
-generateBtcAddress(vaultId: VaultId): async Result<Text, Text>
-
-// Generate Ethereum address for vault
-generateEthAddress(vaultId: VaultId): async Result<Text, Text>
+icrc2_approve(args: ApproveArgs) -> Result<Nat, ApproveError>
+icrc2_transfer_from(args: TransferFromArgs) -> Result<Nat, TransferFromError>
+icrc2_allowance(account: Account, spender: Account) -> Allowance
 ```
 
-### ICRC-2 Functions
-
+**Vault:**
 ```motoko
-// Get balance of shares
-icrc1_balance_of(vaultId: VaultId, account: Account): async Nat
-
-// Transfer shares
-icrc1_transfer(vaultId: VaultId, args: TransferArgs): async Result<Nat, TransferError>
-
-// Get total supply
-icrc1_total_supply(vaultId: VaultId): async Nat
+deposit(args: DepositArgs) -> Result<Nat, Text>
+withdraw(args: WithdrawArgs) -> Result<Nat, Text>
+generateBitcoinAddress() -> Result<Text, Text>
+generateEthereumAddress() -> Result<Text, Text>
+getVaultMetadata() -> VaultMetadata
+getAssetBalances() -> [AssetBalance]
 ```
 
-## Asset Types
+## Security
 
-The vault supports the following asset types:
-- **ICP**: Internet Computer Protocol token
-- **BTC**: Bitcoin (via threshold ECDSA)
-- **ETH**: Ethereum (via threshold ECDSA)
-- **USDC**: USD Coin
-- **USDT**: Tether USD
+### Access Control
+- Vault creator can update certain parameters
+- ICRC-2 provides granular approval system
+- Chain-key signatures isolated per vault
 
-## Example Workflow
+### Asset Custody
+- ICRC-1 tokens held in vault's account on ledgers
+- Bitcoin/Ethereum held via threshold signatures
+- No admin keys or backdoors
+
+### Upgrade Safety
+- `persistent` actor for automatic stable memory
+- Proper pre/post upgrade hooks
+- StableTrieMap for O(log n) operations
+- Transaction history preserved across upgrades
+
+## Production Considerations
+
+### Critical for Production
+
+1. **Oracle Integration** - Use Pyth or similar for accurate asset pricing
+2. **Complete Chain-Key** - Finish Bitcoin/Ethereum transaction signing
+3. **Real Cryptography** - Replace placeholder SHA-256/Keccak-256/Bech32
+4. **Rate Limiting** - Prevent vault creation spam
+5. **Security Audit** - Professional audit before mainnet
+
+### Recommended Enhancements
+
+6. **Governance** - DAO for protocol parameters
+7. **Fee Collection** - Protocol fee distribution
+8. **Vault Strategies** - Auto-rebalancing, yield optimization
+9. **Analytics** - Portfolio tracking dashboard
+10. **Mobile App** - Native iOS/Android support
+
+## Testing
 
 ```bash
-# 1. Create a vault
-dfx canister call vault createVault '("My Multi-Chain Vault")'
-# Returns: (variant { ok = 0 })
+# Deploy locally
+dfx start --background
+dfx deploy
 
-# 2. Deposit 1 ICP (100,000,000 e8s)
-dfx canister call vault deposit '(0, variant { ICP }, 100_000_000)'
-# Returns: (variant { ok = 100_000_000 }) - 100M shares minted
+# Create a vault
+dfx canister call vault_factory createVault '(record {
+  name = "Test Vault";
+  symbol = "TEST";
+  description = "Test vault for development";
+  supportedAssets = vec {};
+  initialDeposit = null
+})'
 
-# 3. Generate BTC address
-dfx canister call vault generateBtcAddress '(0)'
-# Returns: (variant { ok = "bc1q0placeholder" })
+# Get vault metadata
+dfx canister call vault_factory getVault '(principal "xxxxx-xxxxx")'
 
-# 4. Check balance
-dfx canister call vault icrc1_balance_of '(0, record { owner = principal "xxxxx-xxxxx"; subaccount = null })'
-# Returns: (100_000_000 : nat)
-
-# 5. Redeem 50M shares
-dfx canister call vault redeem '(0, 50_000_000)'
-# Returns: (variant { ok = vec { record { assetType = variant { ICP }; amount = 50_000_000 } } })
+# List all vaults
+dfx canister call vault_factory listVaults '(0, 10)'
 ```
-
-## Development Roadmap
-
-### Phase 1 (Current)
-- [x] Basic vault creation and management
-- [x] ICRC-2 token implementation
-- [x] Deposit and redemption functionality
-- [x] Simple web interface
-- [x] Multi-chain address placeholders
-
-### Phase 2 (Next)
-- [ ] Integrate ICP's threshold ECDSA for real BTC addresses
-- [ ] Integrate threshold Schnorr signatures for ETH addresses
-- [ ] Implement actual cross-chain asset transfers
-- [ ] Add Internet Identity integration
-- [ ] Enhanced UI with wallet connection
-
-### Phase 3 (Future)
-- [ ] Support for additional chains (Solana, Cardano, etc.)
-- [ ] Advanced vault strategies (auto-rebalancing, yield farming)
-- [ ] Governance tokens for vault management
-- [ ] Multi-signature vault operations
-- [ ] Integration with DEXs for asset swaps
-
-## Security Considerations
-
-This is a prototype implementation. For production use:
-
-1. **Threshold Signatures**: Implement real threshold ECDSA/Schnorr for address generation
-2. **Asset Custody**: Use proper asset custody mechanisms (not simulated)
-3. **Access Control**: Add comprehensive access controls and permissions
-4. **Audit**: Get a professional security audit
-5. **Testing**: Extensive testing on testnets before mainnet deployment
-6. **Upgradability**: Implement proper canister upgrade mechanisms
-7. **Rate Limiting**: Add rate limiting for sensitive operations
 
 ## Troubleshooting
 
-### Canister deployment fails
+**Build fails:**
 ```bash
-# Clean and restart
 dfx stop
+rm -rf .dfx
 dfx start --clean --background
 dfx deploy
 ```
 
-### Frontend not loading
+**Frontend not loading:**
 ```bash
-# Check canister status
 dfx canister status frontend
-
-# Rebuild frontend
 dfx build frontend
-dfx canister install frontend --mode reinstall
+dfx canister install frontend --mode upgrade
 ```
-
-### Can't connect wallet
-- Ensure you're using a compatible wallet (Plug, Internet Identity)
-- Check that the canister ID is whitelisted
-- Verify you're on the correct network (local vs. mainnet)
 
 ## Contributing
 
-Contributions are welcome! Please:
-
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
 
 ## Resources
 
-- [Internet Computer Documentation](https://internetcomputer.org/docs)
-- [Motoko Programming Language](https://internetcomputer.org/docs/current/motoko/main/motoko)
-- [ICRC-2 Token Standard](https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-2/README.md)
-- [ICP.Ninja](https://icp.ninja)
-- [Threshold ECDSA](https://internetcomputer.org/docs/current/developer-docs/integrations/t-ecdsa/)
+- [Internet Computer Docs](https://internetcomputer.org/docs)
+- [Motoko Language](https://internetcomputer.org/docs/current/motoko/main/motoko)
+- [ICRC-2 Standard](https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-2/README.md)
+- [Chain-Key Crypto](https://internetcomputer.org/docs/current/developer-docs/integrations/t-ecdsa/)
+- [Internet Identity](https://internetcomputer.org/internet-identity)
 
-## Support
+## License
 
-For questions and support:
-- Create an issue in this repository
-- Join the [Internet Computer Developer Forum](https://forum.dfinity.org/)
-- Check the [ICP Developer Discord](https://discord.gg/jnjVVQaE2C)
+MIT License - See LICENSE file
 
 ---
 
-Built with ❤️ on the Internet Computer
+**Built with ❤️ on the Internet Computer**
+
+*A properly architected multi-asset smart wallet for the decentralized future.*

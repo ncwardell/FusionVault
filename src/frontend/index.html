@@ -3,105 +3,144 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fusion Vault - Multi-Chain Tokenized Vaults</title>
-    <link rel="stylesheet" href="index.css">
+    <title>FusionVault - Multi-Asset Smart Wallet</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🔐 Fusion Vault</h1>
-            <p class="subtitle">Multi-Chain Tokenized Vaults on ICP</p>
-            <div id="auth-section">
-                <button id="connect-btn" class="btn btn-primary">Connect Wallet</button>
-                <span id="principal-display"></span>
+            <div class="logo">
+                <h1>🔐 FusionVault</h1>
+                <p class="tagline">Multi-Asset Fractionally Owned Smart Wallet</p>
+            </div>
+            <div class="auth-section">
+                <button id="login-btn" class="btn btn-primary">Connect with Internet Identity</button>
+                <div id="user-info" class="user-info hidden">
+                    <span id="user-principal"></span>
+                    <button id="logout-btn" class="btn btn-secondary">Disconnect</button>
+                </div>
             </div>
         </header>
 
         <main>
-            <!-- Create Vault Section -->
-            <section class="card">
-                <h2>Create New Vault</h2>
-                <div class="form-group">
-                    <label for="vault-name">Vault Name</label>
-                    <input type="text" id="vault-name" placeholder="My Multi-Chain Vault">
-                    <button id="create-vault-btn" class="btn btn-primary">Create Vault</button>
+            <!-- Login Required Message -->
+            <div id="login-required" class="card info-card">
+                <h2>Welcome to FusionVault</h2>
+                <p>Connect with Internet Identity to create and manage your multi-asset vaults.</p>
+                <div class="features">
+                    <div class="feature">
+                        <h3>📦 Multi-Asset Vaults</h3>
+                        <p>Hold ICP, ckBTC, ckETH, and other ICRC-1 tokens in a single vault</p>
+                    </div>
+                    <div class="feature">
+                        <h3>🪙 Fractional Ownership</h3>
+                        <p>Each vault issues ICRC-2 compliant share tokens</p>
+                    </div>
+                    <div class="feature">
+                        <h3>🔗 Chain-Key Integration</h3>
+                        <p>Native Bitcoin and Ethereum addresses via threshold signatures</p>
+                    </div>
+                    <div class="feature">
+                        <h3>💱 DeFi Ready</h3>
+                        <p>Trade vault shares on DEXs or transfer to any wallet</p>
+                    </div>
                 </div>
-                <div id="create-result"></div>
-            </section>
+            </div>
 
-            <!-- Vault List Section -->
-            <section class="card">
-                <h2>Your Vaults</h2>
-                <button id="refresh-vaults-btn" class="btn btn-secondary">Refresh Vaults</button>
-                <div id="vault-list"></div>
-            </section>
+            <!-- Main Content (shown after login) -->
+            <div id="main-content" class="hidden">
+                <!-- Create Vault Section -->
+                <section class="card">
+                    <h2>Create New Vault</h2>
+                    <form id="create-vault-form">
+                        <div class="form-group">
+                            <label for="vault-name">Vault Name</label>
+                            <input type="text" id="vault-name" placeholder="My Investment Vault" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="vault-symbol">Share Token Symbol</label>
+                            <input type="text" id="vault-symbol" placeholder="MIV" required maxlength="10">
+                        </div>
+                        <div class="form-group">
+                            <label for="vault-description">Description</label>
+                            <textarea id="vault-description" placeholder="A diversified crypto portfolio vault" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Vault</button>
+                    </form>
+                    <div id="create-result" class="result-message"></div>
+                </section>
 
-            <!-- Vault Details Section -->
-            <section class="card" id="vault-details" style="display: none;">
-                <h2>Vault Details</h2>
-                <div id="vault-info"></div>
+                <!-- My Vaults Section -->
+                <section class="card">
+                    <h2>My Vaults</h2>
+                    <button id="refresh-my-vaults" class="btn btn-secondary">Refresh</button>
+                    <div id="my-vaults" class="vaults-grid">
+                        <p class="loading">Loading your vaults...</p>
+                    </div>
+                </section>
 
-                <!-- Multi-Chain Addresses -->
-                <div class="subsection">
-                    <h3>Multi-Chain Addresses</h3>
-                    <div id="chain-addresses"></div>
-                    <button id="generate-btc-btn" class="btn btn-secondary">Generate BTC Address</button>
-                    <button id="generate-eth-btn" class="btn btn-secondary">Generate ETH Address</button>
-                </div>
+                <!-- All Vaults Section -->
+                <section class="card">
+                    <h2>Discover Vaults</h2>
+                    <div class="search-bar">
+                        <input type="text" id="search-input" placeholder="Search vaults by name or symbol...">
+                        <button id="search-btn" class="btn btn-secondary">Search</button>
+                    </div>
+                    <div id="all-vaults" class="vaults-grid">
+                        <p class="loading">Loading vaults...</p>
+                    </div>
+                    <div class="pagination">
+                        <button id="prev-page" class="btn btn-secondary">Previous</button>
+                        <span id="page-info">Page 1</span>
+                        <button id="next-page" class="btn btn-secondary">Next</button>
+                    </div>
+                </section>
+            </div>
+        </main>
 
-                <!-- Deposit Section -->
-                <div class="subsection">
+        <!-- Vault Details Modal -->
+        <div id="vault-modal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <div id="vault-details">
+                    <h2 id="vault-modal-title"></h2>
+                    <div class="vault-metadata">
+                        <p><strong>Symbol:</strong> <span id="vault-symbol-display"></span></p>
+                        <p><strong>Total Supply:</strong> <span id="vault-supply"></span></p>
+                        <p><strong>Your Balance:</strong> <span id="vault-balance"></span></p>
+                        <p><strong>Total Value Locked:</strong> <span id="vault-tvl"></span></p>
+                    </div>
+
+                    <h3>Chain Addresses</h3>
+                    <div id="chain-addresses" class="chain-addresses">
+                        <button id="gen-btc-btn" class="btn btn-secondary">Generate Bitcoin Address</button>
+                        <button id="gen-eth-btn" class="btn btn-secondary">Generate Ethereum Address</button>
+                    </div>
+
                     <h3>Deposit Assets</h3>
                     <div class="form-group">
-                        <label for="asset-type">Asset Type</label>
-                        <select id="asset-type">
+                        <label for="modal-asset-type">Asset Type</label>
+                        <select id="modal-asset-type">
                             <option value="ICP">ICP</option>
-                            <option value="BTC">BTC</option>
-                            <option value="ETH">ETH</option>
-                            <option value="USDC">USDC</option>
-                            <option value="USDT">USDT</option>
+                            <option value="ckBTC">ckBTC</option>
+                            <option value="ckETH">ckETH</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="deposit-amount">Amount (in smallest unit)</label>
-                        <input type="number" id="deposit-amount" placeholder="100000000">
-                        <small>1 ICP = 100,000,000 e8s</small>
+                        <label for="modal-deposit-amount">Amount</label>
+                        <input type="number" id="modal-deposit-amount" placeholder="100000000">
                     </div>
-                    <button id="deposit-btn" class="btn btn-primary">Deposit & Mint Shares</button>
-                    <div id="deposit-result"></div>
+                    <button id="modal-deposit-btn" class="btn btn-primary">Deposit</button>
+                    <div id="modal-deposit-result" class="result-message"></div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Redeem Section -->
-                <div class="subsection">
-                    <h3>Redeem Shares</h3>
-                    <div class="form-group">
-                        <label for="redeem-shares">Shares to Redeem</label>
-                        <input type="number" id="redeem-shares" placeholder="1000000">
-                    </div>
-                    <button id="redeem-btn" class="btn btn-warning">Redeem In-Kind</button>
-                    <div id="redeem-result"></div>
-                </div>
-
-                <!-- Transfer Shares -->
-                <div class="subsection">
-                    <h3>Transfer Shares</h3>
-                    <div class="form-group">
-                        <label for="transfer-to">To Principal</label>
-                        <input type="text" id="transfer-to" placeholder="xxxxx-xxxxx-xxxxx-xxxxx-xxx">
-                    </div>
-                    <div class="form-group">
-                        <label for="transfer-amount">Amount</label>
-                        <input type="number" id="transfer-amount" placeholder="1000000">
-                    </div>
-                    <button id="transfer-btn" class="btn btn-primary">Transfer</button>
-                    <div id="transfer-result"></div>
-                </div>
-            </section>
-        </main>
-
-        <footer>
-            <p>Built on the Internet Computer | Using ICRC-2 Token Standard</p>
-        </footer>
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
     </div>
 
     <script type="module" src="index.js"></script>
