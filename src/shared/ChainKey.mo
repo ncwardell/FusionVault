@@ -64,7 +64,7 @@ module {
 
   // Sign a Bitcoin transaction
   public func signBitcoinTransaction(
-    canisterId: Principal,
+    _canisterId: Principal,
     derivationPath: [Blob],
     messageHash: Blob
   ): async Blob {
@@ -79,7 +79,7 @@ module {
 
   // Sign an Ethereum transaction
   public func signEthereumTransaction(
-    canisterId: Principal,
+    _canisterId: Principal,
     derivationPath: [Blob],
     messageHash: Blob
   ): async Blob {
