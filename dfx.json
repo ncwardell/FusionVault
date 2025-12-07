@@ -1,11 +1,22 @@
 {
   "canisters": {
-    "vault": {
-      "main": "src/vault/main.mo",
+    "vault_factory": {
+      "main": "src/vault_factory/VaultFactory.mo",
       "type": "motoko"
     },
+    "internet_identity": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      },
+      "frontend": {}
+    },
     "frontend": {
-      "dependencies": ["vault"],
+      "dependencies": ["vault_factory", "internet_identity"],
       "frontend": {
         "entrypoint": "src/frontend/index.html"
       },
