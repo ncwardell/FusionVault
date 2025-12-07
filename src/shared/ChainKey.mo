@@ -122,13 +122,13 @@ module {
 
   // Helper: Convert bytes to hex string
   private func bytesToHex(bytes: [Nat8]): Text {
-    let hexChars = "0123456789abcdef";
+    let hexChars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
     var hex = "";
     for (byte in bytes.vals()) {
       let high = Nat8.toNat(byte / 16);
       let low = Nat8.toNat(byte % 16);
-      hex #= Text.fromChar(hexChars.chars().toArray()[high]);
-      hex #= Text.fromChar(hexChars.chars().toArray()[low]);
+      hex #= Text.fromChar(hexChars[high]);
+      hex #= Text.fromChar(hexChars[low]);
     };
     hex
   };
@@ -144,9 +144,9 @@ module {
   public func createDerivationPath(principal: Principal, index: Nat): [Blob] {
     let principalBlob = Principal.toBlob(principal);
     let indexBlob = Blob.fromArray([
-      Nat8.fromNat((index >> 24) % 256),
-      Nat8.fromNat((index >> 16) % 256),
-      Nat8.fromNat((index >> 8) % 256),
+      Nat8.fromNat((index / 16777216) % 256), // index >> 24
+      Nat8.fromNat((index / 65536) % 256),    // index >> 16
+      Nat8.fromNat((index / 256) % 256),      // index >> 8
       Nat8.fromNat(index % 256),
     ]);
     [principalBlob, indexBlob]
