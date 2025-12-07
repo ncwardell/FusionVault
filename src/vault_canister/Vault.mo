@@ -16,7 +16,7 @@ import Types "../shared/Types";
 import ICRC "../shared/ICRC";
 import ChainKey "../shared/ChainKey";
 
-shared(init_msg) actor class Vault(
+shared(init_msg) persistent actor class Vault(
   init_name: Text,
   init_symbol: Text,
   init_decimals: Nat8,
