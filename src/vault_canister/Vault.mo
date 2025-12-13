@@ -16,7 +16,7 @@ import Types "../shared/Types";
 import ICRC "../shared/ICRC";
 import ChainKey "../shared/ChainKey";
 
-shared(init_msg) actor class Vault(
+shared(init_msg) persistent actor class Vault(
   init_name: Text,
   init_symbol: Text,
   init_decimals: Nat8,
@@ -30,9 +30,14 @@ shared(init_msg) actor class Vault(
   private stable var allowanceEntries: [((Types.Account, Types.Account), Types.Allowance)] = [];
   private stable var transactionEntries: [(Nat, Types.Transaction)] = [];
 
+  // Helper: Simple hash function for Nat (transaction IDs)
+  private func natHash(n: Nat): Nat32 {
+    Nat32.fromNat(n % 4294967295)
+  };
+
   private transient var balances = HashMap.HashMap<Types.Account, Nat>(10, accountEqual, accountHash);
   private transient var allowances = HashMap.HashMap<(Types.Account, Types.Account), Types.Allowance>(10, allowanceKeyEqual, allowanceKeyHash);
-  private transient var transactions = HashMap.HashMap<Nat, Types.Transaction>(10, Nat.equal, Hash.hash);
+  private transient var transactions = HashMap.HashMap<Nat, Types.Transaction>(10, Nat.equal, natHash);
 
   // Token metadata
   private stable let name: Text = init_name;
@@ -82,7 +87,7 @@ shared(init_msg) actor class Vault(
       transactionEntries.vals(),
       10,
       Nat.equal,
-      Hash.hash
+      natHash
     );
     balanceEntries := [];
     allowanceEntries := [];

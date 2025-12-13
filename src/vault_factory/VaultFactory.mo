@@ -9,7 +9,7 @@ import Hash "mo:base/Hash";
 import Types "../shared/Types";
 import Vault "../vault_canister/Vault";
 
-actor VaultFactory {
+persistent actor VaultFactory {
 
   // Stable storage for vault registry
   private stable var vaultEntries: [(Principal, Types.VaultMetadata)] = [];
